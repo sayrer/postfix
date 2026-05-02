@@ -1503,6 +1503,7 @@ bool    var_smtpd_use_tls;
 bool    var_smtpd_enforce_tls;
 bool    var_smtpd_tls_wrappermode;
 bool    var_smtpd_tls_auth_only;
+bool    var_smtpd_allow_plaintext;
 char   *var_smtpd_cmd_filter;
 char   *var_smtpd_rej_footer;
 char   *var_smtpd_rej_ftr_maps;
@@ -6949,6 +6950,7 @@ int     main(int argc, char **argv)
 	VAR_SMTPD_REQ_DEADLINE, DEF_SMTPD_REQ_DEADLINE, &var_smtpd_req_deadline,
 	VAR_SMTPD_HIDE_CLIENT_SESSION, DEF_SMTPD_HIDE_CLIENT_SESSION, &var_smtpd_hide_client_session,
 	VAR_REQTLS_ESMTP_HDR, DEF_REQTLS_ESMTP_HDR, &var_reqtls_esmtp_hdr,
+	VAR_SMTPD_ALLOW_PLAINTEXT, DEF_SMTPD_ALLOW_PLAINTEXT, &var_smtpd_allow_plaintext,
 	0,
     };
     static const CONFIG_STR_TABLE str_table[] = {

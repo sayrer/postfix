@@ -443,6 +443,7 @@ int     var_smtpd_tls_ccert_vd;
 char   *var_smtpd_tls_loglevel;
 bool    var_smtpd_use_tls;
 bool    var_smtpd_enforce_tls;
+bool    var_smtpd_allow_plaintext;
 bool    var_smtpd_tls_ask_ccert;
 bool    var_smtpd_tls_req_ccert;
 bool    var_smtpd_tls_enable_rpk;
@@ -1350,6 +1351,10 @@ int     main(int argc, char **argv)
 	VAR_SMTP_ENFORCE_TLS, DEF_SMTP_ENFORCE_TLS, &var_smtp_enforce_tls,
 	0,
     };
+    static const CONFIG_NBOOL_TABLE compat_nbool_table[] = {
+	VAR_SMTPD_ALLOW_PLAINTEXT, DEF_SMTPD_ALLOW_PLAINTEXT, &var_smtpd_allow_plaintext,
+	0,
+    };
     static const CONFIG_NBOOL_TABLE nbool_table[] = {
 	VAR_TLSP_USE_TLS, DEF_TLSP_USE_TLS, &var_tlsp_use_tls,
 	VAR_TLSP_ENFORCE_TLS, DEF_TLSP_ENFORCE_TLS, &var_tlsp_enforce_tls,
@@ -1452,6 +1457,7 @@ int     main(int argc, char **argv)
 		      CA_MAIL_SERVER_STR_TABLE(compat_str_table),
 		      CA_MAIL_SERVER_STR_TABLE(str_table),
 		      CA_MAIL_SERVER_BOOL_TABLE(compat_bool_table),
+		      CA_MAIL_SERVER_NBOOL_TABLE(compat_nbool_table),
 		      CA_MAIL_SERVER_NBOOL_TABLE(nbool_table),
 		      CA_MAIL_SERVER_TIME_TABLE(time_table),
 		      CA_MAIL_SERVER_PRE_INIT(pre_jail_init),

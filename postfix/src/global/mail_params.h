@@ -1344,6 +1344,18 @@ extern bool var_smtpd_enforce_tls;
 #define DEF_SMTPD_TLS_AUTH_ONLY 0
 extern bool var_smtpd_tls_auth_only;
 
+ /*
+  * Hard veto on cleartext SMTP, layered on top of smtpd_tls_security_level.
+  * When "no", the Postfix SMTP server refuses to accept mail over an
+  * unencrypted channel, regardless of the security level. Compatibility-
+  * level gated so that an upgrade preserves current behavior until the
+  * operator opts in by raising compatibility_level.
+  */
+#define VAR_SMTPD_ALLOW_PLAINTEXT	"smtpd_allow_plaintext_session"
+#define DEF_SMTPD_ALLOW_PLAINTEXT	"${{$compatibility_level} <level {3.13} ?" \
+					" {yes} : {no}}"
+extern bool var_smtpd_allow_plaintext;
+
 #define VAR_SMTPD_TLS_ACERT	"smtpd_tls_ask_ccert"
 #define DEF_SMTPD_TLS_ACERT	0
 extern bool var_smtpd_tls_ask_ccert;
@@ -1483,6 +1495,22 @@ extern bool var_smtp_use_tls;
 #define VAR_LMTP_ENFORCE_TLS	"lmtp_enforce_tls"
 #define DEF_LMTP_ENFORCE_TLS	0
 extern bool var_smtp_enforce_tls;
+
+ /*
+  * Hard veto on cleartext SMTP, layered on top of smtp_tls_security_level.
+  * When "no", the Postfix SMTP client defers mail rather than deliver it
+  * over an unencrypted channel. Compatibility-level gated so that an
+  * upgrade preserves current behavior until the operator opts in by
+  * raising compatibility_level. Operators that deliver to arbitrary
+  * Internet MX hosts should keep the default "yes" globally and tighten
+  * via per-transport overrides for known-TLS smarthop destinations.
+  */
+#define VAR_SMTP_ALLOW_PLAINTEXT	"smtp_allow_plaintext_session"
+#define VAR_LMTP_ALLOW_PLAINTEXT	"lmtp_allow_plaintext_session"
+#define DEF_SMTP_ALLOW_PLAINTEXT	"${{$compatibility_level} <level {3.13} ?" \
+					" {yes} : {no}}"
+#define DEF_LMTP_ALLOW_PLAINTEXT	"yes"
+extern bool var_smtp_allow_plaintext;
 
 #define VAR_SMTP_TLS_ENFORCE_PN	"smtp_tls_enforce_peername"
 #define DEF_SMTP_TLS_ENFORCE_PN	1

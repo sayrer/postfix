@@ -146,5 +146,6 @@
 	VAR_LMTP_TLS_ENF_STS_MX_PAT, DEF_LMTP_TLS_ENF_STS_MX_PAT, &var_smtp_tls_enf_sts_mx_pat,
 	VAR_LMTP_LOG_TLS_FEATURE_STATUS, DEF_LMTP_LOG_TLS_FEATURE_STATUS, &var_log_tls_feature_status,
 #endif
+	VAR_LMTP_ALLOW_PLAINTEXT, DEF_LMTP_ALLOW_PLAINTEXT, &var_smtp_allow_plaintext,
 	0,
     };

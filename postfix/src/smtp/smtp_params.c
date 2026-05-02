@@ -150,5 +150,6 @@
 	VAR_SMTP_TLS_ENF_STS_MX_PAT, DEF_SMTP_TLS_ENF_STS_MX_PAT, &var_smtp_tls_enf_sts_mx_pat,
 	VAR_SMTP_LOG_TLS_FEATURE_STATUS, DEF_SMTP_LOG_TLS_FEATURE_STATUS, &var_log_tls_feature_status,
 #endif
+	VAR_SMTP_ALLOW_PLAINTEXT, DEF_SMTP_ALLOW_PLAINTEXT, &var_smtp_allow_plaintext,
 	0,
     };
