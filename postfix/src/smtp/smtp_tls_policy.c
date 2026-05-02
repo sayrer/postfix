@@ -144,6 +144,7 @@
 /* XXX Cache size should scale with [sl]mtp_mx_address_limit. */
 #define CACHE_SIZE 20
 static CTABLE *policy_cache;
+static int cached_global_level = TLS_LEV_NOTFOUND;
 
 static int global_tls_level(void);
 static void dane_init(SMTP_TLS_POLICY *, SMTP_ITERATOR *);
@@ -207,6 +208,19 @@ int     smtp_tls_authorize_mx_hostname(SMTP_TLS_POLICY *tls, const char *name)
 
 void    smtp_tls_list_init(void)
 {
+    /*
+     * Free any previously-built tables so this function is idempotent.
+     * Production calls smtp_tls_list_init() once at startup; unit tests
+     * call it once per case.
+     */
+    if (tls_policy) {
+	maps_free(tls_policy);
+	tls_policy = 0;
+    }
+    if (tls_per_site) {
+	maps_free(tls_per_site);
+	tls_per_site = 0;
+    }
     if (*var_smtp_tls_policy) {
 	tls_policy = maps_create(VAR_LMTP_SMTP(TLS_POLICY),
 				 var_smtp_tls_policy,
@@ -983,36 +997,38 @@ void    smtp_tls_policy_cache_flush(void)
 	ctable_free(policy_cache);
 	policy_cache = 0;
     }
+    cached_global_level = TLS_LEV_NOTFOUND;
 }
 
 /* global_tls_level - parse and cache var_smtp_tls_level */
 
 static int global_tls_level(void)
 {
-    static int l = TLS_LEV_NOTFOUND;
-
-    if (l != TLS_LEV_NOTFOUND)
-	return l;
+    if (cached_global_level != TLS_LEV_NOTFOUND)
+	return cached_global_level;
 
     /*
      * Compute the global TLS policy. This is the default policy level when
      * no per-site policy exists. It also is used to override a wild-card
      * per-site policy.
-     * 
-     * We require that the global level is valid on startup.
+     *
+     * We require that the global level is valid on startup. The cache is
+     * cleared by smtp_tls_policy_cache_flush() so unit tests can iterate
+     * over multiple var_smtp_tls_level settings within a single process.
      */
     if (*var_smtp_tls_level) {
-	if ((l = tls_level_lookup(var_smtp_tls_level)) == TLS_LEV_INVALID)
+	if ((cached_global_level = tls_level_lookup(var_smtp_tls_level)) == TLS_LEV_INVALID)
 	    msg_fatal("invalid tls security level: \"%s\"", var_smtp_tls_level);
     } else if (var_smtp_enforce_tls)
-	l = var_smtp_tls_enforce_peername ? TLS_LEV_VERIFY : TLS_LEV_ENCRYPT;
+	cached_global_level = var_smtp_tls_enforce_peername ? TLS_LEV_VERIFY : TLS_LEV_ENCRYPT;
     else
-	l = var_smtp_use_tls ? TLS_LEV_MAY : TLS_LEV_NONE;
+	cached_global_level = var_smtp_use_tls ? TLS_LEV_MAY : TLS_LEV_NONE;
 
     if (msg_verbose)
-	msg_info("%s TLS level: %s", "global", policy_name(l));
+	msg_info("%s TLS level: %s", "global",
+		 policy_name(cached_global_level));
 
-    return l;
+    return cached_global_level;
 }
 
 #define NONDANE_CONFIG	0		/* Administrator's fault */

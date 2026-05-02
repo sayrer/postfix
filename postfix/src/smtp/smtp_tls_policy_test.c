@@ -82,6 +82,7 @@ char   *var_smtp_tls_sni;
 char   *var_smtp_tls_tafile;
 char   *var_smtp_tls_vfy_cmatch;
 bool    var_smtp_use_tls;
+bool    var_smtp_allow_plaintext;
 char   *var_smtp_tls_excl_ciph;
 bool    var_smtp_tls_enf_sts_mx_pat;
 bool    var_smtp_tls_wrappermode;
@@ -125,6 +126,7 @@ static void test_setup(void)
     var_smtp_tls_tafile = DEF_SMTP_TLS_TAFILE;
     var_smtp_tls_vfy_cmatch = DEF_SMTP_TLS_VFY_CMATCH;
     var_smtp_use_tls = DEF_SMTP_USE_TLS;
+    var_smtp_allow_plaintext = 1;	/* default preserves prior behavior */
     var_smtp_tls_excl_ciph = DEF_SMTP_TLS_EXCL_CIPH;
     var_smtp_tls_enf_sts_mx_pat = 1;
     var_smtp_tls_wrappermode = 0;
@@ -581,6 +583,161 @@ static int test_tls_reqd_no_sans_wrappermode(const struct TEST_CASE *tp)
     return (ret);
 }
 
+ /*
+  * Cleartext-veto tests. These verify that smtp_allow_plaintext_session = no
+  * promotes any sub-ENCRYPT level to ENCRYPT, regardless of how the level
+  * was reached: global setting, per-site policy, or REQUIRETLS sender header.
+  * They are the contract behind "make sure cleartext is impossible".
+  *
+  * run_policy returns PASS iff smtp_tls_policy_cache_query yields the
+  * expected resolved level for the given configuration.
+  */
+struct CLEARTEXT_CASE {
+    const char *global_level;		/* smtp_tls_security_level */
+    const char *per_site_policy;	/* smtp_tls_policy_maps (static:...) */
+    int     sendopts;			/* DELIVER_REQUEST.sendopts */
+    int     allow_plaintext;		/* var_smtp_allow_plaintext */
+    int     wrappermode;		/* var_smtp_tls_wrappermode */
+    int     want_level;
+};
+
+static int run_policy(const struct CLEARTEXT_CASE *c)
+{
+    SMTP_STATE *state = smtp_state_alloc();
+    const char *domain = "example.com";
+    const char *host = "mail.example.com";
+    const char *addr = "10.0.1.1";
+    int     port = 25;
+    int     ret = FAIL;
+
+    var_smtp_tls_level = (char *) c->global_level;
+    var_smtp_tls_policy = (char *) c->per_site_policy;
+    var_smtp_allow_plaintext = c->allow_plaintext;
+    var_smtp_tls_wrappermode = c->wrappermode;
+
+    state->request = &(DELIVER_REQUEST) {
+	.sendopts = c->sendopts,
+    };
+    if (c->sendopts != 0)
+	var_tls_required_enable = 1;
+
+    smtp_tls_list_init();
+    SMTP_ITER_INIT(state->iterator, domain, host, addr, port, state);
+    if (smtp_tls_policy_cache_query(state->why, state->tls,
+				    state->iterator) == 0) {
+	msg_warn("smtp_tls_policy_cache_query failed: %s",
+		 STR(state->why->reason));
+    } else if (state->tls->level != c->want_level) {
+	msg_warn("got TLS level '%s', want '%s'",
+		 str_tls_level(state->tls->level),
+		 str_tls_level(c->want_level));
+    } else {
+	ret = PASS;
+    }
+    smtp_tls_policy_cache_flush();
+    smtp_state_free(state);
+    return (ret);
+}
+
+/* Global "none" + cleartext forbidden -> ENCRYPT. */
+static int test_no_cleartext_promotes_global_none(const struct TEST_CASE *tp)
+{
+    static const struct CLEARTEXT_CASE c = {
+	.global_level = "none",
+	.per_site_policy = "",
+	.allow_plaintext = 0,
+	.want_level = TLS_LEV_ENCRYPT,
+    };
+    return run_policy(&c);
+}
+
+/* Global "may" (opportunistic) + cleartext forbidden -> ENCRYPT. */
+static int test_no_cleartext_promotes_global_may(const struct TEST_CASE *tp)
+{
+    static const struct CLEARTEXT_CASE c = {
+	.global_level = "may",
+	.per_site_policy = "",
+	.allow_plaintext = 0,
+	.want_level = TLS_LEV_ENCRYPT,
+    };
+    return run_policy(&c);
+}
+
+/* Per-site "none" + cleartext forbidden -> ENCRYPT (no per-site escape). */
+static int test_no_cleartext_promotes_per_site_none(const struct TEST_CASE *tp)
+{
+    static const struct CLEARTEXT_CASE c = {
+	.global_level = "may",
+	.per_site_policy = "static:none",
+	.allow_plaintext = 0,
+	.want_level = TLS_LEV_ENCRYPT,
+    };
+    return run_policy(&c);
+}
+
+/*
+ * Sender-supplied "TLS-Required: no" header would normally downgrade SECURE
+ * to MAY (see test_tls_reqd_no_sans_wrappermode). With cleartext forbidden,
+ * the operator's policy wins: resolved level becomes ENCRYPT. Closes the
+ * REQUIRETLS escape hatch.
+ */
+static int test_no_cleartext_overrides_reqtls_no(const struct TEST_CASE *tp)
+{
+    static const struct CLEARTEXT_CASE c = {
+	.global_level = "secure",
+	.per_site_policy = "",
+	.sendopts = SOPT_REQUIRETLS_HEADER,
+	.allow_plaintext = 0,
+	.want_level = TLS_LEV_ENCRYPT,
+    };
+    return run_policy(&c);
+}
+
+/*
+ * The veto must not weaken stronger levels: with the veto in effect,
+ * smtp_tls_security_level = secure resolves to SECURE.
+ */
+static int test_no_cleartext_preserves_secure(const struct TEST_CASE *tp)
+{
+    static const struct CLEARTEXT_CASE c = {
+	.global_level = "secure",
+	.per_site_policy = "",
+	.allow_plaintext = 0,
+	.want_level = TLS_LEV_SECURE,
+    };
+    return run_policy(&c);
+}
+
+/*
+ * Default behavior preservation: with the veto disabled (cleartext allowed,
+ * the upgrade-time default), global "none" still resolves to NONE. Pins the
+ * compatibility-level-gated behavior so an upgraded site does not silently
+ * change. This is the test that would fail if commit 1 were rolled into
+ * commits 2/3 without the compat-level gating.
+ */
+static int test_default_preserves_none(const struct TEST_CASE *tp)
+{
+    static const struct CLEARTEXT_CASE c = {
+	.global_level = "none",
+	.per_site_policy = "",
+	.allow_plaintext = 1,
+	.want_level = TLS_LEV_NONE,
+    };
+    return run_policy(&c);
+}
+
+/* Default behavior preservation: global "may" stays MAY when cleartext is allowed. */
+static int test_default_preserves_may(const struct TEST_CASE *tp)
+{
+    static const struct CLEARTEXT_CASE c = {
+	.global_level = "may",
+	.per_site_policy = "",
+	.allow_plaintext = 1,
+	.want_level = TLS_LEV_MAY,
+    };
+    return run_policy(&c);
+}
+
 static const struct TEST_CASE test_cases[] = {
     {"sts_policy_smoke_test", sts_policy_smoke_test,},
     {"obs_sts_policy_smoke_test", obs_sts_policy_smoke_test,},
@@ -588,6 +745,13 @@ static const struct TEST_CASE test_cases[] = {
     {"test_tls_reqd_no_sans_header", test_tls_reqd_no_sans_header},
     {"test_tls_reqd_no_with_wrappermode", test_tls_reqd_no_with_wrappermode},
     {"test_tls_reqd_no_sans_wrappermode", test_tls_reqd_no_sans_wrappermode},
+    {"test_no_cleartext_promotes_global_none", test_no_cleartext_promotes_global_none},
+    {"test_no_cleartext_promotes_global_may", test_no_cleartext_promotes_global_may},
+    {"test_no_cleartext_promotes_per_site_none", test_no_cleartext_promotes_per_site_none},
+    {"test_no_cleartext_overrides_reqtls_no", test_no_cleartext_overrides_reqtls_no},
+    {"test_no_cleartext_preserves_secure", test_no_cleartext_preserves_secure},
+    {"test_default_preserves_none", test_default_preserves_none},
+    {"test_default_preserves_may", test_default_preserves_may},
     {0},
 };
 
