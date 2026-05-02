@@ -659,44 +659,25 @@ In order to change this behavior, set
 </pre>
 </blockquote>
 
-<h3><a name="server_tls_no_plaintext"> Refusing cleartext inbound
-SMTP </a> </h3>
+<h3><a name="server_tls_no_plaintext"> No cleartext inbound SMTP </a> </h3>
 
-<p> Postfix 3.13 adds the smtpd_allow_plaintext_session parameter
-as a hard veto on cleartext SMTP for the server. When set to "no",
-the Postfix SMTP server refuses to accept mail over an unencrypted
-channel: it advertises STARTTLS, rejects all plaintext commands
-except those allowed before STARTTLS (HELO, EHLO, XCLIENT, STARTTLS,
-NOOP, QUIT, HELP), and treats SASL AUTH as if smtpd_tls_auth_only
-were "yes". </p>
+<p> This Postfix build refuses to accept mail over an unencrypted
+channel. The SMTP server advertises STARTTLS, rejects all plaintext
+commands except those allowed before STARTTLS (HELO, EHLO, XCLIENT,
+STARTTLS, NOOP, QUIT, HELP), and treats SASL AUTH as if
+smtpd_tls_auth_only were "yes". </p>
 
-<p> Per RFC 2487 and RFC 3207, a publicly-referenced SMTP server
-MUST NOT require STARTTLS on port 25. Setting
-"smtpd_allow_plaintext_session = no" globally on such a server will
-break interoperability with peers that do not offer STARTTLS. The
-recommended deployment is to set the flag per-listener in master.cf
-on the submission (587) and submissions (465) services, and leave
-the global default "yes" for the port-25 MX listener. </p>
+<p> Operational consequence: per RFC 2487 and RFC 3207, a
+publicly-referenced SMTP server MUST NOT require STARTTLS on port 25.
+A port-25 listener built from this source tree will reject mail from
+any peer that does not offer STARTTLS, breaking interoperability with
+the part of the public Internet that still delivers cleartext on the
+MX channel. This is a deliberate, hard-coded policy in this build. </p>
 
-<blockquote>
-<pre>
-/etc/postfix/master.cf:
-    submission inet n  -  n  -  -  smtpd
-        -o smtpd_tls_security_level=encrypt
-        -o smtpd_allow_plaintext_session=no
-        -o smtpd_sasl_auth_enable=yes
-    submissions inet n  -  n  -  -  smtpd
-        -o smtpd_tls_wrappermode=yes
-        -o smtpd_allow_plaintext_session=no
-        -o smtpd_sasl_auth_enable=yes
-</pre>
-</blockquote>
-
-<p> When invoked via "<b>sendmail -bs</b>", the Postfix SMTP server
-runs unprivileged with no access to the server private key and
-cannot negotiate TLS at all; the smtpd_allow_plaintext_session flag
-is ignored in that mode so local-IPC submission via sendmail -bs
-continues to work. </p>
+<p> Exception: when invoked via "<b>sendmail -bs</b>", the Postfix
+SMTP server runs unprivileged with no access to the server private
+key and cannot negotiate TLS at all. In that mode the local-IPC
+submission path stays open. </p>
 
 <h3><a name="server_tls_cache">Server-side TLS session cache</a> </h3>
 
@@ -1583,49 +1564,24 @@ just in case the transport table entries are not specified consistently. </p>
 </pre>
 </blockquote>
 
-<h4><a name="client_tls_no_plaintext"> Refusing cleartext outbound
-SMTP </a> </h4>
+<h4><a name="client_tls_no_plaintext"> No cleartext outbound SMTP </a> </h4>
 
-<p> Postfix 3.13 adds the smtp_allow_plaintext_session parameter
-as a hard veto on cleartext SMTP, layered on top of
-smtp_tls_security_level. When set to "no", the Postfix SMTP client
-refuses to deliver mail over an unencrypted channel: any sub-ENCRYPT
-level resolved by the policy machinery (NONE, MAY, a per-site override,
-or a sender's "TLS-Required: no" downgrade) is promoted to ENCRYPT,
-the remote peer must offer STARTTLS, and a failed handshake defers
-the message instead of falling back to cleartext. </p>
+<p> This Postfix build refuses to deliver mail over an unencrypted
+channel. Any sub-ENCRYPT level resolved by the policy machinery
+(NONE, MAY, a per-site override, or a sender's "TLS-Required: no"
+downgrade) is silently promoted to ENCRYPT. The remote peer must
+offer STARTTLS, and a failed handshake defers the message instead
+of falling back to cleartext. </p>
 
-<p> This differs from "smtp_tls_security_level = encrypt" in that
-the veto cannot be locally overridden by a per-destination policy
-or a per-message header. It is therefore the right tool when an
-operator wants to say "from this host, never cleartext, regardless
-of what any policy table or sender header says". </p>
+<p> Operational consequence: cleartext SMTP is still the dominant
+transport for port-25 MX delivery on the public Internet. With
+unconditional TLS, mail to any recipient whose MX does not offer
+STARTTLS will defer until the queue lifetime expires and the message
+bounces. This is by design. </p>
 
-<p> Operational caveat: cleartext SMTP is still the dominant
-transport for port-25 MX delivery on the public Internet. Setting
-"smtp_allow_plaintext_session = no" globally on an MTA that delivers
-to arbitrary domains will defer mail to every recipient whose MX
-does not offer STARTTLS, until the queue lifetime expires and the
-message bounces. The recommended deployment is per-transport: a
-dedicated relay transport that ships only to a known-TLS smarthop
-or a TLS-mandating destination. </p>
-
-<blockquote>
-<pre>
-/etc/postfix/master.cf:
-    relay     unix  -       -       n       -       -       smtp
-            -o smtp_tls_security_level=encrypt
-            -o smtp_allow_plaintext_session=no
-</pre>
-</blockquote>
-
-<p> The flag's default is compatibility-level gated: with
-"compatibility_level &ge; 3.13" the default is "no", otherwise "yes".
-This preserves the behavior of upgraded sites until the operator
-explicitly opts in by raising compatibility_level. See the
-<a href="COMPATIBILITY_README.html#allow_plaintext">backwards-compatibility
-notes</a> for the reminder log line that fires while the legacy
-default is in effect. </p>
+<p> The smtp_tls_security_level parameter is still honored for
+authentication strictness (encrypt / dane / verify / secure). Settings
+of "none" or "may" are silently treated as "encrypt". </p>
 
 <h4><a name="client_tls_dane">DANE TLS authentication.</a> </h4>
 

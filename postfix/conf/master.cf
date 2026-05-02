@@ -20,7 +20,6 @@ smtp      inet  n       -       n       -       -       smtpd
 #  -o syslog_name=postfix/submission
 #  -o smtpd_forbid_unauth_pipelining=no
 #  -o smtpd_tls_security_level=encrypt
-#  -o smtpd_allow_plaintext_session=no
 #  -o smtpd_sasl_auth_enable=yes
 #  -o smtpd_tls_auth_only=yes
 #  -o local_header_rewrite_clients=static:all
@@ -45,7 +44,6 @@ smtp      inet  n       -       n       -       -       smtpd
 #  -o syslog_name=postfix/submissions
 #  -o smtpd_forbid_unauth_pipelining=no
 #  -o smtpd_tls_wrappermode=yes
-#  -o smtpd_allow_plaintext_session=no
 #  -o smtpd_sasl_auth_enable=yes
 #  -o local_header_rewrite_clients=static:all
 #  -o smtpd_hide_client_session=yes
@@ -81,12 +79,6 @@ smtp      unix  -       -       n       -       -       smtp
 relay     unix  -       -       n       -       -       smtp
         -o syslog_name=${multi_instance_name?{$multi_instance_name}:{postfix}}/$service_name
 #       -o smtp_helo_timeout=5 -o smtp_connect_timeout=5
-# A satellite host that ships only to a known-TLS smarthop can refuse
-# cleartext outbound by adding the following overrides on a relay
-# transport. Do NOT enable this on a transport that delivers to arbitrary
-# Internet MX hosts: peers without STARTTLS will defer to bounce.
-#       -o smtp_tls_security_level=encrypt
-#       -o smtp_allow_plaintext_session=no
 showq     unix  n       -       n       -       -       showq
 error     unix  -       -       n       -       -       error
 retry     unix  -       -       n       -       -       error

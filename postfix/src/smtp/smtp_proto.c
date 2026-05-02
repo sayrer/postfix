@@ -859,40 +859,37 @@ int     smtp_helo(SMTP_STATE *state)
 	     * there are no more alternative MX hosts.
 	     */
 	    session->features &= ~SMTP_FEATURE_STARTTLS;
-	    if (TLS_REQUIRED_BY_SECURITY_LEVEL(state->tls->level)
-		|| TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level)
-		|| !var_smtp_allow_plaintext) {
-		/* Before returning, decide all relevant policy status info. */
-		if (TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level)) {
-		    if (state->tls_stats)
-			smtp_tls_stat_decide_reqtls(state->tls_stats,
-						 SMTP_TLS_STAT_NAME_NOSTTLS,
-						    POL_STAT_VIOLATION);
-		}
-		if (TLS_REQUIRED_BY_SECURITY_LEVEL(state->tls->level)) {
-		    if (state->tls_stats)
-			smtp_tls_stat_decide_sec_level(state->tls_stats,
-						       state->tls->level,
-						       POL_STAT_VIOLATION);
-		}
-		/* Then, REQUIRETLS failure must take precedence over other. */
-		if (TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level)) {
-		    return (smtp_misc_fail(state, SMTP_MISC_FAIL_DONT_CACHE
-					   | SMTP_MISC_FAIL_SOFT_NON_FINAL,
-					   DSN_BY_LOCAL_MTA,
-					   SMTP_RESP_FAKE(&fake, "5.7.10"),
-					   "Sender requested REQUIRETLS, "
-					   "but host %s refused to "
-					   "start TLS: %s", session->namaddr,
-					   translit(resp->str, "\n", " ")));
-		}
-		/* TLS_REQUIRED_BY_SECURITY_LEVEL */
-		return (smtp_site_fail(state, STR(iter->host), resp,
-		    "TLS is required, but host %s refused to start TLS: %s",
-				       session->namaddr,
+	    /*
+	     * TLS is mandatory. A STARTTLS rejection always defers; there is
+	     * no plaintext fallback.
+	     */
+	    if (TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level)) {
+		if (state->tls_stats)
+		    smtp_tls_stat_decide_reqtls(state->tls_stats,
+						SMTP_TLS_STAT_NAME_NOSTTLS,
+						POL_STAT_VIOLATION);
+	    }
+	    if (TLS_REQUIRED_BY_SECURITY_LEVEL(state->tls->level)) {
+		if (state->tls_stats)
+		    smtp_tls_stat_decide_sec_level(state->tls_stats,
+						   state->tls->level,
+						   POL_STAT_VIOLATION);
+	    }
+	    /* REQUIRETLS failure takes precedence over other. */
+	    if (TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level)) {
+		return (smtp_misc_fail(state, SMTP_MISC_FAIL_DONT_CACHE
+				       | SMTP_MISC_FAIL_SOFT_NON_FINAL,
+				       DSN_BY_LOCAL_MTA,
+				       SMTP_RESP_FAKE(&fake, "5.7.10"),
+				       "Sender requested REQUIRETLS, "
+				       "but host %s refused to "
+				       "start TLS: %s", session->namaddr,
 				       translit(resp->str, "\n", " ")));
 	    }
-	    /* Else try to continue in plain-text mode. */
+	    return (smtp_site_fail(state, STR(iter->host), resp,
+		    "TLS is required, but host %s refused to start TLS: %s",
+				   session->namaddr,
+				   translit(resp->str, "\n", " ")));
 	}
 
 	/*
@@ -906,9 +903,14 @@ int     smtp_helo(SMTP_STATE *state)
 	 * requires TLS, return the message as undeliverable only when there
 	 * are no more alternative MX hosts.
 	 */
+	/*
+	 * TLS is mandatory. After policy_create, tls->level is always at
+	 * least ENCRYPT, so TLS_REQUIRED_BY_SECURITY_LEVEL is always true
+	 * here; the predicate is left for clarity and to keep the existing
+	 * TLSRPT/REQUIRETLS reporting structure intact.
+	 */
 	if (TLS_REQUIRED_BY_SECURITY_LEVEL(state->tls->level)
-	    || TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level)
-	    || !var_smtp_allow_plaintext) {
+	    || TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level)) {
 	    if (!(session->features & SMTP_FEATURE_STARTTLS)) {
 #ifdef USE_TLSRPT
 		if (state->tlsrpt)
@@ -956,18 +958,13 @@ int     smtp_helo(SMTP_STATE *state)
 				       "TLS is required, but unavailable"));
 	    }
 	}
-	/* Continue in plain-text mode. */
-	if (!var_smtp_allow_plaintext)
-	    msg_panic("%s: cleartext fall-through reached with %s = no",
-		      myname, VAR_LMTP_SMTP(ALLOW_PLAINTEXT));
-	if (state->tls_stats) {
-	    smtp_tls_stat_decide_sec_level(state->tls_stats, TLS_LEV_NONE,
-					   POL_STAT_COMPLIANT);
-	    if (state->reqtls_level > SMTP_REQTLS_POLICY_ACT_DISABLE)
-		smtp_tls_stat_decide_reqtls(state->tls_stats,
-					    SMTP_TLS_STAT_NAME_NONE,
-					    POL_STAT_COMPLIANT);
-	}
+	/*
+	 * Unreachable: TLS is mandatory and the if-branch above always
+	 * returns. msg_panic guards against any future refactor that
+	 * re-introduces a plaintext fall-through.
+	 */
+	msg_panic("%s: cleartext fall-through reached; TLS is mandatory",
+		  myname);
     }
 #endif
 #ifdef USE_SASL_AUTH

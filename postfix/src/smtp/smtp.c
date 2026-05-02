@@ -1120,7 +1120,6 @@ char   *var_smtp_addr_pref;
 char   *var_smtp_tls_level;
 bool    var_smtp_use_tls;
 bool    var_smtp_enforce_tls;
-bool    var_smtp_allow_plaintext;
 char   *var_smtp_tls_per_site;
 char   *var_smtp_tls_policy;
 bool    var_smtp_tls_wrappermode;

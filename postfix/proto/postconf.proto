@@ -12315,39 +12315,6 @@ smtpd_tls_mandatory_protocols = !SSLv2, !SSLv3, !TLSv1, !TLSv1.1
 
 <p> This feature is available in Postfix 2.3 and later. </p>
 
-%PARAM smtp_allow_plaintext_session Postfix &ge; 3.13: no; Postfix &lt; 3.13: yes
-
-<p> Hard veto on cleartext SMTP for the Postfix SMTP client, layered on
-top of <a href="postconf.5.html#smtp_tls_security_level">smtp_tls_security_level</a>.
-When set to "no", the Postfix SMTP client refuses to deliver mail over
-an unencrypted channel: if STARTTLS is not offered or the TLS handshake
-fails, the message is deferred rather than retried in cleartext. </p>
-
-<p> The default is compatibility-level gated: with compatibility_level
-&ge; 3.13 the default is "no", otherwise "yes". This preserves the
-behavior of upgraded sites until the operator explicitly opts in by
-raising compatibility_level. </p>
-
-<p> Operational caveat: cleartext SMTP is still the dominant transport
-for port-25 MX delivery on the public Internet. An MTA that delivers
-to arbitrary domains and is configured with "smtp_allow_plaintext_session
-= no" will defer mail to every recipient whose MX does not offer
-STARTTLS, until the queue lifetime expires and the message bounces.
-For that reason, operators that deliver to arbitrary domains should
-keep the default "yes" globally and tighten via per-transport overrides
-(for example, on a satellite host that ships only to a known-TLS
-smarthop). </p>
-
-<p> See also: <a href="postconf.5.html#smtp_tls_security_level">smtp_tls_security_level</a>,
-<a href="TLS_README.html">TLS_README</a>. </p>
-
-<p> This feature is available in Postfix 3.13 and later. </p>
-
-%PARAM lmtp_allow_plaintext_session yes
-
-<p> The LMTP-specific version of the smtp_allow_plaintext_session
-configuration parameter. See there for details. </p>
-
 %PARAM smtp_tls_security_level Postfix &ge; 3.11: may; Postfix &lt; 3.11: empty
 
 <p> The default SMTP TLS security level for the Postfix SMTP client.
@@ -12356,8 +12323,13 @@ parameters smtp_use_tls, smtp_enforce_tls, and smtp_tls_enforce_peername;
 when no value is specified for those obsolete parameters, the default
 SMTP TLS security level is <a href="TLS_README.html#client_tls_may">may</a>
 (compatibility_level &ge; 3.11) or <a
-href="TLS_README.html#client_tls_none">none</a> 
+href="TLS_README.html#client_tls_none">none</a>
 (compatibility_level &lt; 3.11). </p>
+
+<p> Note: TLS is mandatory in this Postfix build. Sub-ENCRYPT levels
+("none", "may") and per-site policies that resolve to NONE or MAY are
+silently promoted to "encrypt"; cleartext delivery is not possible
+regardless of this setting. </p>
 
 <p> Specify one of the following security levels: </p>
 
@@ -13043,47 +13015,19 @@ configuration parameter.  See there for details. </p>
 
 <p> This feature is available in Postfix 2.3 and later. </p>
 
-%PARAM smtpd_allow_plaintext_session Postfix &ge; 3.13: no; Postfix &lt; 3.13: yes
-
-<p> Hard veto on cleartext SMTP for the Postfix SMTP server, layered
-on top of <a href="postconf.5.html#smtpd_tls_security_level">smtpd_tls_security_level</a>.
-When set to "no", the Postfix SMTP server refuses to accept mail over
-an unencrypted channel: it advertises STARTTLS, rejects all plaintext
-commands except those allowed before STARTTLS (HELO, EHLO, XCLIENT,
-STARTTLS, NOOP, QUIT, and HELP), and treats SASL AUTH as if
-<a href="postconf.5.html#smtpd_tls_auth_only">smtpd_tls_auth_only</a>
-were "yes". </p>
-
-<p> The default is compatibility-level gated: with compatibility_level
-&ge; 3.13 the default is "no", otherwise "yes". This preserves the
-behavior of upgraded sites until the operator explicitly opts in by
-raising compatibility_level. </p>
-
-<p> Operational caveat: per RFC 2487 and RFC 3207, a publicly-referenced
-SMTP server MUST NOT require STARTTLS on port 25. Setting
-"smtpd_allow_plaintext_session = no" globally on such a server will
-break interoperability with peers that do not offer STARTTLS. The
-recommended deployment is to set "smtpd_allow_plaintext_session = no"
-per-listener in <a href="master.5.html">master.cf</a> on the submission
-(587) and submissions (465) services, and leave the global default
-"yes" for the port-25 MX listener. </p>
-
-<p> Note: when invoked via "<b>sendmail -bs</b>", Postfix will never
-offer STARTTLS due to insufficient privileges to access the server
-private key; in that mode this parameter is ignored. </p>
-
-<p> See also: <a href="postconf.5.html#smtpd_tls_security_level">smtpd_tls_security_level</a>,
-<a href="postconf.5.html#smtpd_tls_auth_only">smtpd_tls_auth_only</a>,
-<a href="TLS_README.html">TLS_README</a>. </p>
-
-<p> This feature is available in Postfix 3.13 and later. </p>
-
 %PARAM smtpd_tls_security_level
 
 <p> The SMTP TLS security level for the Postfix SMTP server; when
 a non-empty value is specified, this overrides the obsolete parameters
 smtpd_use_tls and smtpd_enforce_tls. This parameter is ignored with
 "smtpd_tls_wrappermode = yes".  </p>
+
+<p> Note: TLS is mandatory in this Postfix build. Settings of "none" or
+"may" are silently promoted to "encrypt"; the SMTP server refuses any
+non-PRE_TLS command before STARTTLS and treats AUTH as if
+smtpd_tls_auth_only were "yes", regardless of this setting. The single
+exception is "sendmail -bs", which runs unprivileged and has no access
+to the server private key. </p>
 
 <p> Specify one of the following security levels: </p>
 

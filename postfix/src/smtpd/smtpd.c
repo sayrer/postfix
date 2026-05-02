@@ -1503,7 +1503,6 @@ bool    var_smtpd_use_tls;
 bool    var_smtpd_enforce_tls;
 bool    var_smtpd_tls_wrappermode;
 bool    var_smtpd_tls_auth_only;
-bool    var_smtpd_allow_plaintext;
 char   *var_smtpd_cmd_filter;
 char   *var_smtpd_rej_footer;
 char   *var_smtpd_rej_ftr_maps;
@@ -6611,24 +6610,25 @@ static void pre_jail_init(char *unused_name, char **unused_argv)
      * With non-wrapper mode, TLS enforce mode implies that we don't advertise
      * AUTH before the client issues STARTTLS.
      */
-    var_smtpd_enforce_tls = var_smtpd_tls_wrappermode || var_smtpd_enforce_tls;
-    var_smtpd_tls_auth_only = var_smtpd_tls_auth_only || var_smtpd_enforce_tls;
-    var_smtpd_use_tls = var_smtpd_use_tls || var_smtpd_enforce_tls;
-
     /*
-     * Hard veto on cleartext: when smtpd_allow_plaintext_session = no, force
-     * STARTTLS enforcement, AUTH-after-TLS, and STARTTLS advertisement.
-     * Exception: when invoked via "sendmail -bs", we run unprivileged with
-     * no access to the server's private key, so there is no way to negotiate
-     * TLS and the only sensible action is to honor the existing local-IPC
-     * delivery path. Treat the flag as "yes" in that case.
+     * TLS is mandatory. Force STARTTLS enforcement, AUTH-after-TLS, and
+     * STARTTLS advertisement, regardless of smtpd_tls_security_level or
+     * the legacy smtpd_use_tls / smtpd_enforce_tls / smtpd_tls_auth_only
+     * settings. Exception: when invoked via "sendmail -bs", smtpd runs
+     * unprivileged with no access to the server private key and cannot
+     * negotiate TLS at all; in that mode the local-IPC submission path
+     * stays open.
      */
-    if (getuid() != 0 && getuid() != var_owner_uid)
-	var_smtpd_allow_plaintext = 1;
-    if (!var_smtpd_allow_plaintext) {
+    if (getuid() == 0 || getuid() == var_owner_uid) {
 	var_smtpd_enforce_tls = 1;
 	var_smtpd_tls_auth_only = 1;
 	var_smtpd_use_tls = 1;
+    } else {
+	var_smtpd_enforce_tls = var_smtpd_tls_wrappermode
+	    || var_smtpd_enforce_tls;
+	var_smtpd_tls_auth_only = var_smtpd_tls_auth_only
+	    || var_smtpd_enforce_tls;
+	var_smtpd_use_tls = var_smtpd_use_tls || var_smtpd_enforce_tls;
     }
 
     /*
@@ -6966,7 +6966,6 @@ int     main(int argc, char **argv)
 	VAR_SMTPD_REQ_DEADLINE, DEF_SMTPD_REQ_DEADLINE, &var_smtpd_req_deadline,
 	VAR_SMTPD_HIDE_CLIENT_SESSION, DEF_SMTPD_HIDE_CLIENT_SESSION, &var_smtpd_hide_client_session,
 	VAR_REQTLS_ESMTP_HDR, DEF_REQTLS_ESMTP_HDR, &var_reqtls_esmtp_hdr,
-	VAR_SMTPD_ALLOW_PLAINTEXT, DEF_SMTPD_ALLOW_PLAINTEXT, &var_smtpd_allow_plaintext,
 	0,
     };
     static const CONFIG_STR_TABLE str_table[] = {

@@ -591,22 +591,13 @@ extern HBC_CALL_BACKS smtp_hbc_callbacks[];
 
 #define TRACE_REQ_ONLY	(DEL_REQ_TRACE_ONLY(state->request->flags))
 
-#define PLAINTEXT_FALLBACK_OK_AFTER_STARTTLS_FAILURE \
-	(session->tls_context == 0 \
-	    && state->tls->level == TLS_LEV_MAY \
-	    && var_smtp_allow_plaintext \
-	    && !TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level) \
-	    && (TRACE_REQ_ONLY || PREACTIVE_DELAY >= var_min_backoff_time) \
-	    && !HAVE_SASL_CREDENTIALS)
-
-#define PLAINTEXT_FALLBACK_OK_AFTER_TLS_SESSION_FAILURE \
-	(session->tls_context != 0 \
-	    && SMTP_RCPT_LEFT(state) > SMTP_RCPT_MARK_COUNT(state) \
-	    && state->tls->level == TLS_LEV_MAY \
-	    && var_smtp_allow_plaintext \
-	    && !TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level) \
-	    && (TRACE_REQ_ONLY || PREACTIVE_DELAY >= var_min_backoff_time) \
-	    && !HAVE_SASL_CREDENTIALS)
+ /*
+  * TLS is mandatory: there is no plaintext fallback after STARTTLS or TLS
+  * session failure. These macros are kept (and forced to 0) so that
+  * callers compile unchanged.
+  */
+#define PLAINTEXT_FALLBACK_OK_AFTER_STARTTLS_FAILURE	(0)
+#define PLAINTEXT_FALLBACK_OK_AFTER_TLS_SESSION_FAILURE	(0)
 
  /*
   * XXX The following will not retry recipients that were deferred while the

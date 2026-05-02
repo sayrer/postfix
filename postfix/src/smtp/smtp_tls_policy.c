@@ -792,16 +792,16 @@ static void *policy_create(const char *unused_key, void *context)
     }
 
     /*
-     * Hard veto on cleartext: if smtp_allow_plaintext_session = no, promote
-     * any sub-ENCRYPT level (NONE, MAY) to ENCRYPT. This catches global
-     * smtp_tls_security_level=none/may, per-site policies that downgraded to
-     * NONE/MAY, and the STATE_TLS_NOT_REQUIRED downgrade above. A sender's
-     * "TLS-Required: no" header MUST NOT bypass operator policy.
+     * TLS is mandatory. Promote any sub-ENCRYPT level (NONE, MAY) to ENCRYPT
+     * unconditionally. This catches smtp_tls_security_level=none/may, per-
+     * site policies that resolved to NONE/MAY, and the STATE_TLS_NOT_REQUIRED
+     * downgrade above. A sender's "TLS-Required: no" header cannot bypass
+     * this; TLS is not optional.
      */
-    if (!var_smtp_allow_plaintext && tls->level < TLS_LEV_ENCRYPT) {
+    if (tls->level < TLS_LEV_ENCRYPT) {
 	if (msg_verbose)
-	    msg_info("%s: promoting %s to encrypt: %s = no", __func__,
-		     policy_name(tls->level), VAR_LMTP_SMTP(ALLOW_PLAINTEXT));
+	    msg_info("%s: promoting %s to encrypt: TLS is mandatory",
+		     __func__, policy_name(tls->level));
 	tls->level = TLS_LEV_ENCRYPT;
     }
 

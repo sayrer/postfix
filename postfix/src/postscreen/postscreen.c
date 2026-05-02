@@ -549,7 +549,6 @@ char   *var_psc_ehlo_dis_maps;
 char   *var_smtpd_tls_level;
 bool    var_smtpd_use_tls;
 bool    var_smtpd_enforce_tls;
-bool    var_smtpd_allow_plaintext;
 char   *var_psc_tls_level;
 bool    var_psc_use_tls;
 bool    var_psc_enforce_tls;
@@ -1424,7 +1423,6 @@ int     main(int argc, char **argv)
 	VAR_PSC_DISABLE_VRFY, DEF_PSC_DISABLE_VRFY, &var_psc_disable_vrfy,
 	VAR_PSC_USE_TLS, DEF_PSC_USE_TLS, &var_psc_use_tls,
 	VAR_PSC_ENFORCE_TLS, DEF_PSC_ENFORCE_TLS, &var_psc_enforce_tls,
-	VAR_SMTPD_ALLOW_PLAINTEXT, DEF_SMTPD_ALLOW_PLAINTEXT, &var_smtpd_allow_plaintext,
 	VAR_PSC_TLS_ACERT, DEF_PSC_TLS_ACERT, &var_psc_tls_ask_ccert,
 	VAR_PSC_TLS_ENABLE_RPK, DEF_PSC_TLS_ENABLE_RPK, &var_psc_tls_enable_rpk,
 	VAR_PSC_TLS_RCERT, DEF_PSC_TLS_RCERT, &var_psc_tls_req_ccert,

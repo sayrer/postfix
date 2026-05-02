@@ -26,41 +26,41 @@ now also distributed with the more recent Eclipse Public License
 license of their choice. Those who are more comfortable with the
 IPL can continue with that license.
 
-Major changes with snapshot 20260502
-====================================
+Incompatible changes with snapshot 20260502
+===========================================
 
-New "smtp_allow_plaintext_session" and "smtpd_allow_plaintext_session"
-parameters that, when set to "no", refuse to send or accept mail over
-an unencrypted SMTP channel regardless of *_tls_security_level. The
-flag is layered on top of the existing security level: when "no", any
-sub-ENCRYPT level resolved by the policy machinery (NONE, MAY, or a
-sender's "TLS-Required: no" downgrade) is promoted to ENCRYPT, the
-remote peer must offer STARTTLS, and a failed handshake defers the
-message instead of falling back to cleartext.
+TLS is now mandatory. This Postfix build refuses to send or accept
+mail over an unencrypted SMTP channel; cleartext SMTP is no longer
+supported. There is no configuration parameter to opt out.
 
-A "yes" setting preserves Postfix 3.12 behavior. The default is
-compatibility-level gated: with "compatibility_level >= 3.13" the
-default flips to "no". This matches the precedent used for
-smtpd_relay_before_recipient_restrictions and smtp_tls_security_level.
+Outbound (smtp client): the policy resolver promotes any sub-ENCRYPT
+level (NONE, MAY, per-site overrides, sender "TLS-Required: no"
+header downgrades) to ENCRYPT. The remote peer must offer STARTTLS;
+a failed handshake defers the message instead of falling back to
+cleartext. Mail to any recipient whose MX does not offer STARTTLS
+will defer until the queue lifetime expires and the message bounces.
 
-The recommended deployment is to enable the veto per-listener (in
-master.cf for submission/submissions) and per-transport (for relay
-to known-TLS smarthops), and keep the global default "yes" for any
-MTA that delivers to arbitrary Internet MX hosts. Setting the flag
-globally on such an MTA will defer mail to every recipient whose MX
-does not offer STARTTLS, until the queue lifetime expires.
+Inbound (smtpd server): smtpd_check_init unconditionally forces
+smtpd_use_tls, smtpd_enforce_tls, and smtpd_tls_auth_only to "yes",
+overriding smtpd_tls_security_level. The server advertises STARTTLS,
+rejects all plaintext commands except those allowed before STARTTLS
+(HELO, EHLO, XCLIENT, STARTTLS, NOOP, QUIT, HELP), and refuses AUTH
+before TLS. A port-25 listener built from this tree will reject mail
+from any peer that does not offer STARTTLS, in violation of RFC 2487
+and RFC 3207. This is intentional.
 
-The Postfix SMTP server treats "smtpd_allow_plaintext_session = no"
-as if "smtpd_tls_security_level = encrypt" and "smtpd_tls_auth_only = yes"
-were set, except when invoked via "sendmail -bs" (which has no access
-to the server private key); in the latter case the flag is ignored,
-matching the existing local-IPC fallback behavior.
+Exception: "sendmail -bs" runs unprivileged with no access to the
+server private key. In that mode TLS is bypassed and local-IPC
+submission continues to work.
 
-A sender-supplied "TLS-Required: no" header (RFC 8689) cannot bypass
-the operator's "smtp_allow_plaintext_session = no" setting on the
-SMTP client. The header would normally downgrade the security level
-to MAY; with the veto in effect, the policy resolver promotes that
-downgrade to ENCRYPT.
+Configuration parameters smtp_tls_security_level and
+smtpd_tls_security_level remain honored for authentication strictness
+(encrypt / dane / verify / secure on the client side, encrypt on the
+server). Settings of "none" or "may" are silently treated as "encrypt".
+
+The smtp_allow_plaintext_session / smtpd_allow_plaintext_session
+parameters that briefly existed during development of this branch
+have been removed; the behavior they enabled is now hard-wired.
 
 Incompatible changes with snapshot 20260312
 ===========================================
