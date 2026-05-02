@@ -6616,6 +6616,22 @@ static void pre_jail_init(char *unused_name, char **unused_argv)
     var_smtpd_use_tls = var_smtpd_use_tls || var_smtpd_enforce_tls;
 
     /*
+     * Hard veto on cleartext: when smtpd_allow_plaintext_session = no, force
+     * STARTTLS enforcement, AUTH-after-TLS, and STARTTLS advertisement.
+     * Exception: when invoked via "sendmail -bs", we run unprivileged with
+     * no access to the server's private key, so there is no way to negotiate
+     * TLS and the only sensible action is to honor the existing local-IPC
+     * delivery path. Treat the flag as "yes" in that case.
+     */
+    if (getuid() != 0 && getuid() != var_owner_uid)
+	var_smtpd_allow_plaintext = 1;
+    if (!var_smtpd_allow_plaintext) {
+	var_smtpd_enforce_tls = 1;
+	var_smtpd_tls_auth_only = 1;
+	var_smtpd_use_tls = 1;
+    }
+
+    /*
      * Keys can only be loaded when running with suitable permissions. When
      * called from "sendmail -bs" this is not the case, so we must not
      * announce STARTTLS support.
