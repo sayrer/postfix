@@ -778,6 +778,20 @@ static void *policy_create(const char *unused_key, void *context)
     }
 
     /*
+     * Hard veto on cleartext: if smtp_allow_plaintext_session = no, promote
+     * any sub-ENCRYPT level (NONE, MAY) to ENCRYPT. This catches global
+     * smtp_tls_security_level=none/may, per-site policies that downgraded to
+     * NONE/MAY, and the STATE_TLS_NOT_REQUIRED downgrade above. A sender's
+     * "TLS-Required: no" header MUST NOT bypass operator policy.
+     */
+    if (!var_smtp_allow_plaintext && tls->level < TLS_LEV_ENCRYPT) {
+	if (msg_verbose)
+	    msg_info("%s: promoting %s to encrypt: %s = no", __func__,
+		     policy_name(tls->level), VAR_LMTP_SMTP(ALLOW_PLAINTEXT));
+	tls->level = TLS_LEV_ENCRYPT;
+    }
+
+    /*
      * DANE initialization may change the security level to something else,
      * so do this early, so that we use the right level below.  Note that
      * "dane-only" changes to "dane" once we obtain the requisite TLSA

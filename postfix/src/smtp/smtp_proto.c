@@ -860,7 +860,8 @@ int     smtp_helo(SMTP_STATE *state)
 	     */
 	    session->features &= ~SMTP_FEATURE_STARTTLS;
 	    if (TLS_REQUIRED_BY_SECURITY_LEVEL(state->tls->level)
-		|| TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level)) {
+		|| TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level)
+		|| !var_smtp_allow_plaintext) {
 		/* Before returning, decide all relevant policy status info. */
 		if (TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level)) {
 		    if (state->tls_stats)
@@ -906,7 +907,8 @@ int     smtp_helo(SMTP_STATE *state)
 	 * are no more alternative MX hosts.
 	 */
 	if (TLS_REQUIRED_BY_SECURITY_LEVEL(state->tls->level)
-	    || TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level)) {
+	    || TLS_REQUIRED_BY_REQTLS_POLICY(state->reqtls_level)
+	    || !var_smtp_allow_plaintext) {
 	    if (!(session->features & SMTP_FEATURE_STARTTLS)) {
 #ifdef USE_TLSRPT
 		if (state->tlsrpt)
@@ -955,6 +957,9 @@ int     smtp_helo(SMTP_STATE *state)
 	    }
 	}
 	/* Continue in plain-text mode. */
+	if (!var_smtp_allow_plaintext)
+	    msg_panic("%s: cleartext fall-through reached with %s = no",
+		      myname, VAR_LMTP_SMTP(ALLOW_PLAINTEXT));
 	if (state->tls_stats) {
 	    smtp_tls_stat_decide_sec_level(state->tls_stats, TLS_LEV_NONE,
 					   POL_STAT_COMPLIANT);
