@@ -114,6 +114,15 @@ setting <i>xxx</i>_security_level=(empty)</a> </p>
 
 </ul>
 
+<p> Logged with compatibility_level &lt; 3.13: </p>
+
+<ul>
+
+<li> <p> <a href="#allow_plaintext"> using backwards-compatible default
+setting <i>xxx</i>_allow_plaintext_session=yes</a> </p>
+
+</ul>
+
 <p>
 
 <p> If such a message is logged in the context of a legitimate
@@ -655,6 +664,53 @@ make the backwards-compatible empty setting permanent in main.cf: </p>
 </blockquote>
 
 <p> where <i>xxx</i> is taken from the above compatibility message. </p>
+
+<h2> <a name="allow_plaintext"> Using backwards-compatible
+default setting <i>xxx</i>_allow_plaintext_session=yes</a> </h2>
+
+<p> Postfix version 3.13 introduces the smtp_allow_plaintext_session
+and smtpd_allow_plaintext_session parameters as a hard veto on
+cleartext SMTP, layered on top of <i>xxx</i>_tls_security_level.
+With "compatibility_level &gt;= 3.13" the default is "no" (refuse
+cleartext); for backwards compatibility, when the parameter is left
+unspecified at its implicit default value and compatibility_level
+&lt; 3.13, Postfix uses the legacy default "yes" and logs: </p>
+
+<blockquote>
+<pre>
+postfix/smtp[...] using backwards-compatible default setting
+    smtp_allow_plaintext_session=yes
+</pre>
+</blockquote>
+
+<blockquote>
+<pre>
+postfix/smtpd[...] using backwards-compatible default setting
+    smtpd_allow_plaintext_session=yes
+</pre>
+</blockquote>
+
+<p> To keep the old default setting, the system administrator should
+make the backwards-compatible "yes" setting permanent in main.cf: </p>
+
+<blockquote>
+<pre>
+# <b>postconf <i>xxx</i>_allow_plaintext_session=yes</b>
+# <b>postfix reload</b>
+</pre>
+</blockquote>
+
+<p> where <i>xxx</i> is taken from the above compatibility message. </p>
+
+<p> Operational caveat: setting "smtp_allow_plaintext_session = no"
+globally on an MTA that delivers to arbitrary Internet MX hosts will
+defer mail to every recipient whose MX does not offer STARTTLS, until
+the queue lifetime expires. The recommended deployment is to set
+"smtpd_allow_plaintext_session = no" per-listener in master.cf
+(submission, submissions) and "smtp_allow_plaintext_session = no"
+per-transport (relay to known-TLS smarthops), keeping the global
+default "yes" for the port-25 MX listener and the default outbound
+transport. </p>
 
 <h2> <a name="turnoff">Turning off the backwards-compatibility safety net</a> </h2>
 

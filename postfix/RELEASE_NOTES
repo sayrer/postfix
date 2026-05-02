@@ -26,6 +26,42 @@ now also distributed with the more recent Eclipse Public License
 license of their choice. Those who are more comfortable with the
 IPL can continue with that license.
 
+Major changes with snapshot 20260502
+====================================
+
+New "smtp_allow_plaintext_session" and "smtpd_allow_plaintext_session"
+parameters that, when set to "no", refuse to send or accept mail over
+an unencrypted SMTP channel regardless of *_tls_security_level. The
+flag is layered on top of the existing security level: when "no", any
+sub-ENCRYPT level resolved by the policy machinery (NONE, MAY, or a
+sender's "TLS-Required: no" downgrade) is promoted to ENCRYPT, the
+remote peer must offer STARTTLS, and a failed handshake defers the
+message instead of falling back to cleartext.
+
+A "yes" setting preserves Postfix 3.12 behavior. The default is
+compatibility-level gated: with "compatibility_level >= 3.13" the
+default flips to "no". This matches the precedent used for
+smtpd_relay_before_recipient_restrictions and smtp_tls_security_level.
+
+The recommended deployment is to enable the veto per-listener (in
+master.cf for submission/submissions) and per-transport (for relay
+to known-TLS smarthops), and keep the global default "yes" for any
+MTA that delivers to arbitrary Internet MX hosts. Setting the flag
+globally on such an MTA will defer mail to every recipient whose MX
+does not offer STARTTLS, until the queue lifetime expires.
+
+The Postfix SMTP server treats "smtpd_allow_plaintext_session = no"
+as if "smtpd_tls_security_level = encrypt" and "smtpd_tls_auth_only = yes"
+were set, except when invoked via "sendmail -bs" (which has no access
+to the server private key); in the latter case the flag is ignored,
+matching the existing local-IPC fallback behavior.
+
+A sender-supplied "TLS-Required: no" header (RFC 8689) cannot bypass
+the operator's "smtp_allow_plaintext_session = no" setting on the
+SMTP client. The header would normally downgrade the security level
+to MAY; with the veto in effect, the policy resolver promotes that
+downgrade to ENCRYPT.
+
 Incompatible changes with snapshot 20260312
 ===========================================
 
